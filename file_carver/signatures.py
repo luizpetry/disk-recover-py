@@ -139,6 +139,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 100 * 1024 * 1024,
         "footer": None,
         "folder": "EXE",
+        "validate": "pe",  # Valida cabecalho PE para reduzir falsos positivos
     },
     "TIFF_LE": {
         "header": bytes([0x49, 0x49, 0x2A, 0x00]),

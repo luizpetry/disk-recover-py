@@ -78,6 +78,37 @@ def _validate_mp4(chunk: bytes, hit_pos: int) -> bool:
     return True
 
 
+def _validate_pe(chunk: bytes, hit_pos: int) -> bool:
+    """Validacao de cabecalho PE para reduzir falsos positivos de EXE/MZ.
+
+    Verifica:
+      1. Pelo menos 64 bytes disponiveis (tamanho minimo de um PE header)
+      2. Offset 0x3C aponta para a assinatura PE
+      3. Nos bytes apontados por 0x3C esta 'PE\\0\\0' (0x50 0x45 0x00 0x00)
+      4. O offset 0x3C esta dentro de limites razoaveis (< 1024 bytes)
+    """
+    file_start = hit_pos  # hit_pos ja e a posicao do MZ no buffer
+
+    # Precisa de pelo menos 64 bytes (offset 0x3C + 4 bytes para PE sig)
+    if file_start + 64 > len(chunk):
+        return False
+
+    # Ler offset do cabecalho PE (little-endian uint32 em offset 0x3C)
+    pe_offset = struct.unpack_from("<I", chunk, file_start + 0x3C)[0]
+
+    # PE offset razoavel: deve estar entre 0x40 e 0x400 (tipicamente 0x80-0x200)
+    if pe_offset < 0x40 or pe_offset > 0x400:
+        return False
+
+    # Verificar se ha espaco suficiente para a assinatura PE
+    if file_start + pe_offset + 4 > len(chunk):
+        return False
+
+    # A assinatura PE deve ser 'PE\0\0'
+    pe_sig = chunk[file_start + pe_offset : file_start + pe_offset + 4]
+    return pe_sig == b"PE\x00\x00"
+
+
 def _compute_md5(data: bytes) -> str:
     """Calcula o hash MD5 de um bloco de dados."""
     return hashlib.md5(data).hexdigest()
@@ -141,6 +172,14 @@ def extract_file(
     # Validacao MP4 adicional (reduz falsos positivos)
     if sig.get("validate") == "mp4":
         if not _validate_mp4(chunk, start_in_data):
+            return len(sig["header"]), None
+
+    # Validacao PE adicional (reduz falsos positivos de EXE/MZ)
+    if sig.get("validate") == "pe":
+        if not _validate_pe(chunk, start_in_data):
+            log_lines.append(
+                f"[INV] {sig_name} — cabecalho PE invalido (falso positivo MZ)"
+            )
             return len(sig["header"]), None
 
     # Verificacao secundaria (AVI/WAV)
