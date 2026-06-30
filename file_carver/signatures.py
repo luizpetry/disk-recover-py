@@ -63,6 +63,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "folder": "BMP",
         "size_offset": 2,  # campo de tamanho no header BMP (little-endian uint32 em offset 2)
         "size_length": 4,
+        "validate": "bmp",  # Valida cabecalho BMP para reduzir falsos positivos
     },
     "ZIP": {
         "header": bytes([0x50, 0x4B, 0x03, 0x04]),

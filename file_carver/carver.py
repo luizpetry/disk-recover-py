@@ -109,6 +109,53 @@ def _validate_pe(chunk: bytes, hit_pos: int) -> bool:
     return pe_sig == b"PE\x00\x00"
 
 
+def _validate_bmp(chunk: bytes, hit_pos: int) -> bool:
+    """Validacao de cabecalho BMP para reduzir falsos positivos.
+
+    Verifica:
+      1. Pelo menos 54 bytes disponiveis (header minimo BITMAPINFOHEADER)
+      2. Tamanho declarado no offset 2 e razoavel (54 < size < max_size)
+      3. Offset para dados de pixel (offset 10) e razoavel (54..1024)
+      4. Tamanho do DIB header (offset 14) e valido (40, 52, 56, 108, 124)
+      5. Bits por pixel (offset 28) e valido (1, 4, 8, 16, 24, 32)
+    """
+    file_start = hit_pos
+
+    # Precisa de pelo menos 54 bytes para BITMAPINFOHEADER
+    if file_start + 54 > len(chunk):
+        return False
+
+    # Tamanho declarado do arquivo (little-endian uint32 em offset 2)
+    declared_size = struct.unpack_from("<I", chunk, file_start + 2)[0]
+
+    # Tamanho razoavel: pelo menos o header (54 bytes) e no max 100 MB
+    if declared_size < 54 or declared_size > 100 * 1024 * 1024:
+        return False
+
+    # Offset para dados de pixel (little-endian uint32 em offset 10)
+    pixel_offset = struct.unpack_from("<I", chunk, file_start + 10)[0]
+
+    # Offset razoavel: tipicamente 54 (24-bit) ou 1024 (256-color palette)
+    if pixel_offset < 54 or pixel_offset > 4096:
+        return False
+
+    # Tamanho do DIB header (little-endian uint32 em offset 14)
+    dib_header_size = struct.unpack_from("<I", chunk, file_start + 14)[0]
+
+    # DIB header valido: BITMAPINFOHEADER(40), BITMAPV5HEADER(124), etc.
+    valid_dib_sizes = {12, 40, 52, 56, 64, 108, 124}
+    if dib_header_size not in valid_dib_sizes:
+        return False
+
+    # Bits por pixel (little-endian uint16 em offset 28)
+    bpp = struct.unpack_from("<H", chunk, file_start + 28)[0]
+    valid_bpp = {1, 4, 8, 16, 24, 32}
+    if bpp not in valid_bpp:
+        return False
+
+    return True
+
+
 def _compute_md5(data: bytes) -> str:
     """Calcula o hash MD5 de um bloco de dados."""
     return hashlib.md5(data).hexdigest()
@@ -179,6 +226,14 @@ def extract_file(
         if not _validate_pe(chunk, start_in_data):
             log_lines.append(
                 f"[INV] {sig_name} — cabecalho PE invalido (falso positivo MZ)"
+            )
+            return len(sig["header"]), None
+
+    # Validacao BMP adicional (reduz falsos positivos)
+    if sig.get("validate") == "bmp":
+        if not _validate_bmp(chunk, start_in_data):
+            log_lines.append(
+                f"[INV] {sig_name} — cabecalho BMP invalido (falso positivo)"
             )
             return len(sig["header"]), None
 
@@ -292,6 +347,9 @@ def scan_device(
     rejected_counts: dict[str, int] = {name: 0 for name in selected_sigs}
     file_counter = 0
     seen_hashes: set[str] = set()
+    total_hits_found = 0  # Total de hits encontrados em todos os chunks
+    chunks_with_hits = 0  # Quantos chunks tiveram pelo menos 1 hit
+    last_log_mb = 0  # Para logging periodico em discos grandes
 
     # BUG FIX: rastrear posicoes ja processadas entre chunks
     global_processed_up_to = 0
@@ -378,10 +436,21 @@ def scan_device(
 
             # Log detalhado: quantos hits encontrados neste chunk
             if hits:
+                total_hits_found += len(hits)
+                chunks_with_hits += 1
                 log_lines.append(
                     f"[CHUNK] {format_bytes(bytes_read)}: "
                     f"{len(hits)} hit(s) encontrado(s) "
                     f"({', '.join(f'{n}:{sum(1 for _,sn,_ in hits if sn==n)}' for n in dict.fromkeys(sn for _,sn,_ in hits))})"
+                )
+
+            # Log periodico para discos grandes (a cada 500 MB sem hits)
+            current_mb = bytes_read // (500 * 1024 * 1024)
+            if not hits and current_mb > last_log_mb:
+                last_log_mb = current_mb
+                log_lines.append(
+                    f"[SCAN] {format_bytes(bytes_read)} varridos — "
+                    f"{total_hits_found} hits totais, {file_counter} arquivos"
                 )
 
             skip_until = 0
@@ -443,6 +512,8 @@ def scan_device(
     log_lines.append("")
     log_lines.append(f"Fim: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log_lines.append(f"Total de bytes varridos: {format_bytes(bytes_read)}")
+    log_lines.append(f"Total de hits encontrados: {total_hits_found}")
+    log_lines.append(f"Chunks com hits: {chunks_with_hits}")
     log_lines.append(f"Total de arquivos recuperados: {file_counter}")
     log_lines.append("")
     log_lines.append("Resumo por tipo:")
@@ -457,8 +528,8 @@ def scan_device(
             log_lines.append(f"  {sig_name}: {', '.join(parts)}")
     log_lines.append("")
     log_lines.append("NOTA: Arquivos pequenos (< ~700 bytes no NTFS) podem ficar")
-    log_lines.append("armazenados dentro do MFT e serem perdidos na formatacao.")
-    log_lines.append("Use arquivos > 1 MB para testes mais realistas.")
+    log_lines.append("armazenados dentro do MFT e serem perdidos na formatacao rapida.")
+    log_lines.append("Para testes, use arquivos > 1 MB.")
 
     write_log(log_lines, log_path)
     return found_counts
