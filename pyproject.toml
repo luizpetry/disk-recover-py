@@ -31,6 +31,9 @@ classifiers = [
     "Topic :: Security",
 ]
 
+[tool.setuptools.packages.find]
+include = ["file_carver*"]
+
 [project.scripts]
 disk-recover = "file_carver.cli:run_interactive"
 
