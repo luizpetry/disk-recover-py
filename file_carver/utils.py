@@ -44,12 +44,8 @@ def format_bytes(size: Optional[int]) -> str:
 
 
 def get_default_output_dir() -> str:
-    """Retorna o diretorio padrao para arquivos recuperados."""
-    if is_windows():
-        # os.path.join("C:", "foo") retorna "C:foo" (relativo) — precisamos da barra
-        drive = os.environ.get("SystemDrive", "C:")
-        return os.path.join(drive + os.sep, "Recovered_Files")
-    return os.path.expanduser("~/Recovered_Files")
+    """Retorna o diretorio padrao para arquivos recuperados (relativo ao CWD)."""
+    return "Recovered_Files"
 
 
 def ensure_output_dir(path: str) -> str:
