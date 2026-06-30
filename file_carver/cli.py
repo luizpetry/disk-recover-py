@@ -204,13 +204,21 @@ def _menu_recuperacao(config: dict) -> None:
     print("  Iniciando varredura... Pressione Ctrl+C para interromper a qualquer momento.")
     print()
 
+    # Criar subpasta com timestamp para cada varredura
+    import datetime as _dt
+    timestamp = _dt.datetime.now().strftime("%Y-%m-%d_%H%M")
+    scan_output_dir = os.path.join(output_dir, timestamp)
+    os.makedirs(scan_output_dir, exist_ok=True)
+    print(f"  Resultados em: {scan_output_dir}")
+    print()
+
     stop_flag = [False]
     start_time = time.time()
 
     try:
         found_counts = scan_device(
             device_path=device_path,
-            output_dir=output_dir,
+            output_dir=scan_output_dir,
             selected_sigs=selected_sigs,
             limit_bytes=lim,
             stop_flag=stop_flag,
@@ -228,7 +236,7 @@ def _menu_recuperacao(config: dict) -> None:
     total_found = sum(found_counts.values())
     print(f"  Total de arquivos recuperados : {total_found}")
     print(f"  Tempo de execucao             : {elapsed:.1f} segundos")
-    print(f"  Pasta de saida                : {output_dir}")
+    print(f"  Pasta de saida                : {scan_output_dir}")
     print()
     if total_found > 0:
         print("  Arquivos por tipo:")
@@ -236,9 +244,9 @@ def _menu_recuperacao(config: dict) -> None:
             if count > 0:
                 ext = FILE_SIGNATURES.get(sig_name, {}).get("extension", "?")
                 folder = FILE_SIGNATURES.get(sig_name, {}).get("folder", sig_name)
-                print(f"    {sig_name:<12} (.{ext}) : {count} arquivo(s)  ->  {output_dir}\\{folder}")
+                print(f"    {sig_name:<12} (.{ext}) : {count} arquivo(s)  ->  {scan_output_dir}\\{folder}")
     print()
-    print(f"  Log detalhado salvo em: {os.path.join(output_dir, 'recovery_log.txt')}")
+    print(f"  Log detalhado salvo em: {os.path.join(scan_output_dir, 'recovery_log.txt')}")
     print()
     input("  Pressione Enter para voltar ao menu principal.")
 
@@ -407,19 +415,25 @@ def run_batch(args: list[str] | None = None) -> None:
         limit_bytes = _parse_limit(opts.limit)
 
     # Executar
+    import datetime as _dt
+    timestamp = _dt.datetime.now().strftime("%Y-%m-%d_%H%M")
+    scan_output_dir = os.path.join(opts.output, timestamp)
+    os.makedirs(scan_output_dir, exist_ok=True)
+
     print(_BANNER)
     print(f"  Dispositivo : {opts.device}")
-    print(f"  Saida       : {opts.output}")
+    print(f"  Saida       : {scan_output_dir}")
     print(f"  Tipos       : {', '.join(selected_sigs.keys()) if selected_sigs else 'Todos'}")
     print(f"  Limite      : {format_bytes(limit_bytes) if limit_bytes else 'Sem limite'}")
     print()
 
     found = scan_device(
         device_path=opts.device,
-        output_dir=opts.output,
+        output_dir=scan_output_dir,
         selected_sigs=selected_sigs,
         limit_bytes=limit_bytes,
     )
 
     total = sum(found.values())
     print(f"\nConcluido: {total} arquivo(s) recuperado(s).")
+    print(f"Resultados em: {scan_output_dir}")

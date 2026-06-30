@@ -250,11 +250,16 @@ def scan_device(
         scan_size = total_size  # pode ser None
 
     found_counts: dict[str, int] = {name: 0 for name in selected_sigs}
+    rejected_counts: dict[str, int] = {name: 0 for name in selected_sigs}
     file_counter = 0
     seen_hashes: set[str] = set()
 
     # BUG FIX: rastrear posicoes ja processadas entre chunks
     global_processed_up_to = 0
+
+    log_lines.append(f"Tamanho do dispositivo: {format_bytes(total_size) if total_size else 'desconhecido'}")
+    log_lines.append(f"Tamanho da varredura: {format_bytes(scan_size) if scan_size else 'desconhecido'}")
+    log_lines.append("")
 
     try:
         f = open(device_path, "rb")
@@ -332,9 +337,21 @@ def scan_device(
 
             hits.sort(key=lambda x: x[0])
 
+            # Log detalhado: quantos hits encontrados neste chunk
+            if hits:
+                log_lines.append(
+                    f"[CHUNK] {format_bytes(bytes_read)}: "
+                    f"{len(hits)} hit(s) encontrado(s) "
+                    f"({', '.join(f'{n}:{sum(1 for _,sn,_ in hits if sn==n)}' for n in dict.fromkeys(sn for _,sn,_ in hits))})"
+                )
+
             skip_until = 0
             for hit_pos, sig_name, sig in hits:
                 if hit_pos < skip_until:
+                    log_lines.append(
+                        f"[SKIP] {sig_name} em buffer_pos={hit_pos} "
+                        f"(abs={abs_buffer_start + hit_pos}) — dentro do arquivo anterior"
+                    )
                     continue
                 consumed, saved_path = extract_file(
                     buffer,
@@ -356,6 +373,8 @@ def scan_device(
                             f"Arquivos: {file_counter} | Ultimo: {sig_name}",
                             refresh=False,
                         )
+                else:
+                    rejected_counts[sig_name] = rejected_counts.get(sig_name, 0) + 1
 
             # BUG FIX: atualizar posicao absoluta processada
             global_processed_up_to = abs_buffer_start + len(buffer)
@@ -389,8 +408,18 @@ def scan_device(
     log_lines.append("")
     log_lines.append("Resumo por tipo:")
     for sig_name, count in found_counts.items():
+        rejected = rejected_counts.get(sig_name, 0)
+        parts = []
         if count > 0:
-            log_lines.append(f"  {sig_name}: {count}")
+            parts.append(f"{count} recuperado(s)")
+        if rejected > 0:
+            parts.append(f"{rejected} rejeitado(s)")
+        if parts:
+            log_lines.append(f"  {sig_name}: {', '.join(parts)}")
+    log_lines.append("")
+    log_lines.append("NOTA: Arquivos pequenos (< ~700 bytes no NTFS) podem ficar")
+    log_lines.append("armazenados dentro do MFT e serem perdidos na formatacao.")
+    log_lines.append("Use arquivos > 1 MB para testes mais realistas.")
 
     write_log(log_lines, log_path)
     return found_counts
