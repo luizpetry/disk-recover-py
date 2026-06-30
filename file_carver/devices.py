@@ -9,7 +9,7 @@ import ctypes
 import os
 from typing import Optional
 
-from .utils import format_bytes, get_device_size, is_windows
+from .utils import format_bytes, is_windows
 
 
 class DeviceInfo:
