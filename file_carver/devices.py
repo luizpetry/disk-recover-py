@@ -27,8 +27,34 @@ class DeviceInfo:
         return f"DeviceInfo({self.label!r}, {self.path!r})"
 
 
-def _get_device_size_win32(device_path: str) -> Optional[int]:
-    """Obtem o tamanho do dispositivo via IOCTL no Windows."""
+def _get_partition_size_win32(device_path: str) -> Optional[int]:
+    """Obtem o tamanho da particao via GetDiskFreeSpaceEx (unidades logicas como E:)."""
+    try:
+        free_bytes = ctypes.c_ulonglong(0)
+        total_bytes = ctypes.c_ulonglong(0)
+        avail_bytes = ctypes.c_ulonglong(0)
+        # device_path para GetDiskFreeSpaceEx deve ser "E:\\" nao "\\\\.\\E:"
+        if device_path.startswith("\\\\.\\") and len(device_path) == 6:
+            drive_letter = device_path[4]
+            path_for_api = f"{drive_letter}:\\"
+        else:
+            path_for_api = device_path
+
+        result = ctypes.windll.kernel32.GetDiskFreeSpaceExW(  # type: ignore[attr-defined]
+            path_for_api,
+            ctypes.byref(free_bytes),
+            ctypes.byref(total_bytes),
+            ctypes.byref(avail_bytes),
+        )
+        if result:
+            return total_bytes.value
+        return None
+    except Exception:
+        return None
+
+
+def _get_physical_disk_size_win32(device_path: str) -> Optional[int]:
+    """Obtem o tamanho do disco fisico via IOCTL (PhysicalDrive0, etc.)."""
     try:
         GENERIC_READ = 0x80000000
         FILE_SHARE_READ = 0x00000001
@@ -82,6 +108,15 @@ def _get_device_size_win32(device_path: str) -> Optional[int]:
         return None
     except Exception:
         return None
+
+
+def _get_device_size_win32(device_path: str) -> Optional[int]:
+    """Obtem o tamanho do dispositivo: particao (letra) ou disco fisico (PhysicalDrive)."""
+    # Unidades logicas (\\.\E:) → usa GetDiskFreeSpaceEx para tamanho da particao
+    if device_path.startswith("\\\\.\\") and len(device_path) == 6:
+        return _get_partition_size_win32(device_path)
+    # Discos fisicos (\\.\PhysicalDrive0) → usa IOCTL para tamanho total
+    return _get_physical_disk_size_win32(device_path)
 
 
 def _get_device_size_posix(device_path: str) -> Optional[int]:
