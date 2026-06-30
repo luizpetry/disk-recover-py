@@ -91,6 +91,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 20 * 1024 * 1024,
         "footer": None,
         "folder": "MP3",
+        "validate": "mp3_id3",  # Valida versao ID3v2 e tamanho syncsafe
     },
     "MP3_SYNC": {
         "header": bytes([0xFF, 0xFB]),
@@ -99,6 +100,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 20 * 1024 * 1024,
         "footer": None,
         "folder": "MP3",
+        "validate": "mp3_sync",  # Valida bitrate e sample rate no frame header
     },
     "MP4": {
         # ftyp box aparece em offset 4 da assinatura do container ISO

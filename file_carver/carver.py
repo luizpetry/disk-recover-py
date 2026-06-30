@@ -156,6 +156,73 @@ def _validate_bmp(chunk: bytes, hit_pos: int) -> bool:
     return True
 
 
+def _validate_mp3_sync(chunk: bytes, hit_pos: int) -> bool:
+    """Validacao de frame header MP3 (MPEG Audio Layer III).
+
+    Verifica os 4 bytes do frame header:
+      - Byte 0-1: sync word (0xFF 0xFB) — ja validado pela assinatura
+      - Byte 2: bitrate index (bits 7-4) deve ser 1-14 (nao 0=free nem 15=bad)
+      - Byte 2: sample rate index (bits 3-2) deve ser 0-2 (nao 3=reserved)
+    """
+    file_start = hit_pos
+
+    # Precisa de pelo menos 4 bytes para o frame header
+    if file_start + 4 > len(chunk):
+        return False
+
+    byte2 = chunk[file_start + 2]
+
+    # Bitrate index (bits 7-4): 0=free (invalido para arquivo fixo), 15=bad
+    bitrate_index = (byte2 >> 4) & 0x0F
+    if bitrate_index == 0 or bitrate_index == 15:
+        return False
+
+    # Sample rate index (bits 3-2): 3=reserved (invalido)
+    sample_rate_index = (byte2 >> 2) & 0x03
+    if sample_rate_index == 3:
+        return False
+
+    return True
+
+
+def _validate_mp3_id3(chunk: bytes, hit_pos: int) -> bool:
+    """Validacao de cabecalho ID3v2.
+
+    Verifica:
+      1. Pelo menos 10 bytes disponiveis (header ID3v2 = 10 bytes)
+      2. Byte 3 (versao major): 2, 3 ou 4 (ID3v2.2, v2.3, v2.4)
+      3. Bytes 6-9 (tamanho syncsafe): cada byte deve ter bit 7 = 0
+      4. Tamanho total > 0
+    """
+    file_start = hit_pos
+
+    # Precisa de pelo menos 10 bytes para o header ID3v2
+    if file_start + 10 > len(chunk):
+        return False
+
+    # Versao major (byte 3): deve ser 2, 3 ou 4
+    version_major = chunk[file_start + 3]
+    if version_major not in (2, 3, 4):
+        return False
+
+    # Tamanho syncsafe (bytes 6-9): cada byte usa 7 bits, bit 7 sempre 0
+    for i in range(6, 10):
+        if chunk[file_start + i] & 0x80:
+            return False
+
+    # Tamanho total deve ser > 0
+    size = (
+        ((chunk[file_start + 6] & 0x7F) << 21)
+        | ((chunk[file_start + 7] & 0x7F) << 14)
+        | ((chunk[file_start + 8] & 0x7F) << 7)
+        | (chunk[file_start + 9] & 0x7F)
+    )
+    if size == 0:
+        return False
+
+    return True
+
+
 def _compute_md5(data: bytes) -> str:
     """Calcula o hash MD5 de um bloco de dados."""
     return hashlib.md5(data).hexdigest()
@@ -234,6 +301,22 @@ def extract_file(
         if not _validate_bmp(chunk, start_in_data):
             log_lines.append(
                 f"[INV] {sig_name} — cabecalho BMP invalido (falso positivo)"
+            )
+            return len(sig["header"]), None
+
+    # Validacao MP3 sync (reduz falsos positivos de 2 bytes)
+    if sig.get("validate") == "mp3_sync":
+        if not _validate_mp3_sync(chunk, start_in_data):
+            log_lines.append(
+                f"[INV] {sig_name} — frame header MP3 invalido (bitrate/sample rate invalido)"
+            )
+            return len(sig["header"]), None
+
+    # Validacao MP3 ID3 (reduz falsos positivos)
+    if sig.get("validate") == "mp3_id3":
+        if not _validate_mp3_id3(chunk, start_in_data):
+            log_lines.append(
+                f"[INV] {sig_name} — cabecalho ID3v2 invalido (versao/tamanho invalido)"
             )
             return len(sig["header"]), None
 
