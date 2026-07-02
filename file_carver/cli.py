@@ -168,6 +168,11 @@ def _menu_recuperacao(config: dict) -> None:
 
     print(f"\n  Pasta de saida padrao: {config['output_dir']}")
     custom = input("  Pressione Enter para usar o padrao ou digite outro caminho: ").strip()
+    if custom and custom.isdigit():
+        # Evita criar pastas como "0" quando o usuario digita um numero
+        # achando que e uma opcao de menu
+        print(f"  [!] '{custom}' nao parece um caminho valido — usando a pasta padrao.")
+        custom = ""
     output_dir = custom if custom else config["output_dir"]
 
     print()
