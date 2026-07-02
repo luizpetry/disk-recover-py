@@ -21,6 +21,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 15 * 1024 * 1024,  # 15 MB
         "footer": bytes([0xFF, 0xD9]),
         "folder": "JPEG",
+        "validate": "jpeg",  # Valida a estrutura de marcadores ate o SOS
     },
     "PNG": {
         "header": bytes([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
@@ -37,6 +38,8 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 50 * 1024 * 1024,
         "footer": b"%%EOF",
         "folder": "PDF",
+        # PDFs com atualizacoes incrementais tem varios %%EOF; usar o ultimo
+        "footer_search": "last",
     },
     "GIF87": {
         "header": b"GIF87a",
@@ -72,6 +75,9 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 200 * 1024 * 1024,
         "footer": bytes([0x50, 0x4B, 0x05, 0x06]),  # end of central directory
         "folder": "ZIP",
+        # O registro EOCD tem 22 bytes (4 do marcador + 18) + comentario opcional
+        "footer_extra": 18,
+        "footer_kind": "zip_eocd",
     },
     "DOCX": {
         # DOCX/XLSX/PPTX sao ZIPs com conteudo especifico; detectados pelo mesmo magic
@@ -92,6 +98,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "footer": None,
         "folder": "MP3",
         "validate": "mp3_id3",  # Valida versao ID3v2 e tamanho syncsafe
+        "carve": "mp3",  # Segue a cadeia de frames para achar o fim real
     },
     "MP3_SYNC": {
         "header": bytes([0xFF, 0xFB]),
@@ -100,7 +107,8 @@ FILE_SIGNATURES: dict[str, dict] = {
         "max_size": 20 * 1024 * 1024,
         "footer": None,
         "folder": "MP3",
-        "validate": "mp3_sync",  # Valida bitrate e sample rate no frame header
+        "validate": "mp3_sync",  # Exige cadeia de frames consecutivos validos
+        "carve": "mp3",  # Segue a cadeia de frames para achar o fim real
     },
     "MP4": {
         # ftyp box aparece em offset 4 da assinatura do container ISO
