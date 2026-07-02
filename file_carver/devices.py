@@ -62,7 +62,34 @@ def _get_physical_disk_size_win32(device_path: str) -> Optional[int]:
         OPEN_EXISTING = 3
         IOCTL_DISK_GET_DRIVE_GEOMETRY_EX = 0x000700A0
 
-        handle = ctypes.windll.kernel32.CreateFileW(  # type: ignore[attr-defined]
+        kernel32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+
+        # BUG FIX: sem restype/argtypes o handle (void*) e truncado para
+        # c_int em Python 64 bits e a comparacao com INVALID_HANDLE_VALUE
+        # (c_void_p(-1).value = 2^64-1) nunca bate
+        kernel32.CreateFileW.restype = ctypes.c_void_p
+        kernel32.CreateFileW.argtypes = [
+            ctypes.c_wchar_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+        ]
+        kernel32.DeviceIoControl.argtypes = [
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.c_void_p,
+            ctypes.c_uint32,
+            ctypes.POINTER(ctypes.c_ulong),
+            ctypes.c_void_p,
+        ]
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+
+        handle = kernel32.CreateFileW(
             device_path,
             GENERIC_READ,
             FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -71,7 +98,8 @@ def _get_physical_disk_size_win32(device_path: str) -> Optional[int]:
             0,
             None,
         )
-        if handle == ctypes.c_void_p(-1).value:
+        INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+        if handle is None or handle == INVALID_HANDLE_VALUE:
             return None
 
         class DISK_GEOMETRY(ctypes.Structure):  # type: ignore[misc]
@@ -92,7 +120,7 @@ def _get_physical_disk_size_win32(device_path: str) -> Optional[int]:
 
         geo = DISK_GEOMETRY_EX()
         bytes_returned = ctypes.c_ulong(0)
-        result = ctypes.windll.kernel32.DeviceIoControl(  # type: ignore[attr-defined]
+        result = kernel32.DeviceIoControl(
             handle,
             IOCTL_DISK_GET_DRIVE_GEOMETRY_EX,
             None,
@@ -102,7 +130,7 @@ def _get_physical_disk_size_win32(device_path: str) -> Optional[int]:
             ctypes.byref(bytes_returned),
             None,
         )
-        ctypes.windll.kernel32.CloseHandle(handle)  # type: ignore[attr-defined]
+        kernel32.CloseHandle(handle)
         if result:
             return geo.DiskSize
         return None
