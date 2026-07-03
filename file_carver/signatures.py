@@ -19,6 +19,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "jpg",
         "max_size": 15 * 1024 * 1024,  # 15 MB
+        "min_size": 10 * 1024,  # 10 KB — filtra icons/thumbnails do sistema
         "footer": bytes([0xFF, 0xD9]),
         "folder": "JPEG",
         "validate": "jpeg",  # Valida a estrutura de marcadores ate o SOS
@@ -28,6 +29,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "png",
         "max_size": 20 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB — filtra icons/thumbnails do sistema
         "footer": bytes([0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82]),  # IEND chunk CRC
         "folder": "PNG",
     },
@@ -36,6 +38,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "pdf",
         "max_size": 50 * 1024 * 1024,
+        "min_size": 1024,  # 1 KB
         "footer": b"%%EOF",
         "folder": "PDF",
         # PDFs com atualizacoes incrementais tem varios %%EOF; usar o ultimo
@@ -46,6 +49,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "gif",
         "max_size": 10 * 1024 * 1024,
+        "min_size": 5 * 1024,  # 5 KB — GIFs de sistema sao bem pequenos
         "footer": bytes([0x00, 0x3B]),
         "folder": "GIF",
     },
@@ -54,6 +58,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "gif",
         "max_size": 10 * 1024 * 1024,
+        "min_size": 5 * 1024,  # 5 KB
         "footer": bytes([0x00, 0x3B]),
         "folder": "GIF",
     },
@@ -62,6 +67,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "bmp",
         "max_size": 30 * 1024 * 1024,
+        "min_size": 5 * 1024,  # 5 KB
         "footer": None,  # usa tamanho do header
         "folder": "BMP",
         "size_offset": 2,  # campo de tamanho no header BMP (little-endian uint32 em offset 2)
@@ -73,6 +79,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "zip",
         "max_size": 200 * 1024 * 1024,
+        "min_size": 1024,  # 1 KB
         "footer": bytes([0x50, 0x4B, 0x05, 0x06]),  # end of central directory
         "folder": "ZIP",
         # O registro EOCD tem 22 bytes (4 do marcador + 18) + comentario opcional
@@ -95,6 +102,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "mp3",
         "max_size": 20 * 1024 * 1024,
+        "min_size": 50 * 1024,  # 50 KB — MP3s reais tem no min ~100 KB
         "footer": None,
         "folder": "MP3",
         "validate": "mp3_id3",  # Valida versao ID3v2 e tamanho syncsafe
@@ -105,6 +113,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "mp3",
         "max_size": 20 * 1024 * 1024,
+        "min_size": 50 * 1024,  # 50 KB
         "footer": None,
         "folder": "MP3",
         "validate": "mp3_sync",  # Exige cadeia de frames consecutivos validos
@@ -116,6 +125,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 4,
         "extension": "mp4",
         "max_size": 2 * 1024 * 1024 * 1024,  # 2 GB
+        "min_size": 100 * 1024,  # 100 KB
         "footer": None,
         "folder": "MP4",
         # MP4 requer verificacao adicional: o box anterior ao ftyp deve ter
@@ -128,6 +138,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "avi",
         "max_size": 2 * 1024 * 1024 * 1024,
+        "min_size": 100 * 1024,  # 100 KB
         "footer": None,
         "folder": "AVI",
         "secondary_check_offset": 8,
@@ -138,6 +149,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "wav",
         "max_size": 300 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "WAV",
         "secondary_check_offset": 8,
@@ -148,6 +160,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "exe",
         "max_size": 100 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "EXE",
         "validate": "pe",  # Valida cabecalho PE para reduzir falsos positivos
@@ -157,6 +170,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "tif",
         "max_size": 100 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "TIFF",
     },
@@ -165,6 +179,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "tif",
         "max_size": 100 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "TIFF",
     },
@@ -173,6 +188,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "psd",
         "max_size": 500 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "PSD",
     },
@@ -181,6 +197,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "rar",
         "max_size": 500 * 1024 * 1024,
+        "min_size": 1024,  # 1 KB
         "footer": bytes([0xC4, 0x3D, 0x7B, 0x00, 0x40, 0x07, 0x00]),
         "folder": "RAR",
     },
@@ -189,6 +206,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "rar",
         "max_size": 500 * 1024 * 1024,
+        "min_size": 1024,  # 1 KB
         "footer": None,
         "folder": "RAR",
     },
@@ -197,6 +215,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "db",
         "max_size": 500 * 1024 * 1024,
+        "min_size": 1024,  # 1 KB
         "footer": None,
         "folder": "SQLite",
     },
@@ -205,6 +224,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "xml",
         "max_size": 50 * 1024 * 1024,
+        "min_size": 100,  # 100 bytes — XMLs podem ser pequenos
         "footer": None,
         "folder": "XML",
     },
@@ -213,6 +233,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "ogg",
         "max_size": 100 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "OGG",
     },
@@ -221,6 +242,7 @@ FILE_SIGNATURES: dict[str, dict] = {
         "offset": 0,
         "extension": "flac",
         "max_size": 300 * 1024 * 1024,
+        "min_size": 10 * 1024,  # 10 KB
         "footer": None,
         "folder": "FLAC",
     },

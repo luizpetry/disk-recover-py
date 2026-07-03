@@ -106,6 +106,8 @@ def _menu_configuracoes(config: dict) -> None:
         print(f"  [1] Pasta de saida padrao  : {config['output_dir']}")
         lim = config.get("limit_bytes")
         print(f"  [2] Limite de varredura    : {format_bytes(lim) if lim else 'Sem limite (disco inteiro)'}")
+        min_sz = config.get("min_size")
+        print(f"  [3] Tamanho minimo arquivo : {format_bytes(min_sz) if min_sz else 'Padrao do tipo (filtra icons)'}")
         print()
         print("  [0] Voltar")
         print()
@@ -124,6 +126,21 @@ def _menu_configuracoes(config: dict) -> None:
                 gb = float(val)
                 config["limit_bytes"] = int(gb * 1024**3) if gb > 0 else None
                 print(f"  Limite definido: {format_bytes(config['limit_bytes']) if config['limit_bytes'] else 'Sem limite'}")
+                input("  Pressione Enter para continuar.")
+            except ValueError:
+                print("  Valor invalido.")
+                input("  Pressione Enter para continuar.")
+        elif choice == "3":
+            print("  Tamanho minimo para recuperar arquivos (filtra icons/thumbnails).")
+            print("  Exemplos: 10K (10 KB), 100K (100 KB), 1M (1 MB), 0 = padrao do tipo")
+            val = input("  Tamanho minimo: ").strip()
+            try:
+                if val == "0" or val == "":
+                    config["min_size"] = None
+                    print("  Usando padrao de cada tipo.")
+                else:
+                    config["min_size"] = _parse_limit(val)
+                    print(f"  Tamanho minimo definido: {format_bytes(config['min_size'])}")
                 input("  Pressione Enter para continuar.")
             except ValueError:
                 print("  Valor invalido.")
@@ -179,6 +196,12 @@ def _menu_recuperacao(config: dict) -> None:
     input("  Pressione Enter para selecionar os tipos de arquivo a recuperar...")
     selected_sigs = _menu_selecionar_tipos()
 
+    # Aplicar override de tamanho minimo (se configurado)
+    min_size_override = config.get("min_size")
+    if min_size_override:
+        for name in selected_sigs:
+            selected_sigs[name] = {**selected_sigs[name], "min_size": min_size_override}
+
     clear_screen()
     print(_BANNER)
     print("  RESUMO DA OPERACAO:")
@@ -187,6 +210,8 @@ def _menu_recuperacao(config: dict) -> None:
     print(f"    Tipos        : {', '.join(selected_sigs.keys())}")
     lim = config.get("limit_bytes")
     print(f"    Limite       : {format_bytes(lim) if lim else 'Disco inteiro'}")
+    if min_size_override:
+        print(f"    Min. arquivo : {format_bytes(min_size_override)}")
     print()
 
     try:
@@ -261,6 +286,7 @@ def run_interactive() -> None:
     config: dict = {
         "output_dir": get_default_output_dir(),
         "limit_bytes": None,
+        "min_size": None,
     }
 
     clear_screen()
@@ -300,6 +326,8 @@ def _menu_principal_loop(config: dict) -> None:
         print(f"  Pasta de saida atual: {config['output_dir']}")
         lim = config.get("limit_bytes")
         print(f"  Limite de varredura:  {format_bytes(lim) if lim else 'Sem limite (disco inteiro)'}")
+        min_sz = config.get("min_size")
+        print(f"  Tamanho min. arquivo: {format_bytes(min_sz) if min_sz else 'Padrao do tipo'}")
         print()
         print("  [1] Listar dispositivos disponiveis")
         print("  [2] Iniciar recuperacao de arquivos")
@@ -352,6 +380,11 @@ def _build_argparser() -> argparse.ArgumentParser:
         "-l", "--limit",
         type=str,
         help="Limite de varredura em bytes ou com unidade (ex: 1G, 500M, 100000000)",
+    )
+    parser.add_argument(
+        "-m", "--min-size",
+        type=str,
+        help="Tamanho minimo dos arquivos recuperados em bytes ou com unidade (ex: 10K, 100K, 1M). Default: usa minimo de cada tipo",
     )
     parser.add_argument(
         "--list-devices",
@@ -418,6 +451,20 @@ def run_batch(args: list[str] | None = None) -> None:
     limit_bytes = None
     if opts.limit:
         limit_bytes = _parse_limit(opts.limit)
+
+    # Resolver tamanho minimo (override global)
+    min_size_override = None
+    if opts.min_size:
+        min_size_override = _parse_limit(opts.min_size)
+        # Aplicar override em todas as assinaturas selecionadas
+        if selected_sigs:
+            for name in selected_sigs:
+                selected_sigs[name] = {**selected_sigs[name], "min_size": min_size_override}
+        else:
+            from .signatures import FILE_SIGNATURES as _ALL_SIGS
+            selected_sigs = {}
+            for name, sig in _ALL_SIGS.items():
+                selected_sigs[name] = {**sig, "min_size": min_size_override}
 
     # Executar
     import datetime as _dt

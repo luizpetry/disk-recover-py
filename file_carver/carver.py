@@ -641,6 +641,14 @@ def extract_file(
     if file_data is None or len(file_data) < sig_offset + header_len:
         return header_len, None, False
 
+    # Filtro de tamanho minimo (filtra icons, thumbnails e miniaturas do sistema)
+    min_size = sig.get("min_size", 0)
+    if min_size and len(file_data) < min_size:
+        log_lines.append(
+            f"[TINY] {sig_name} — {len(file_data)} bytes < minimo {min_size} bytes (rejeitado)"
+        )
+        return header_len, None, False
+
     consumed = len(file_data)
 
     # Deduplicacao via MD5
