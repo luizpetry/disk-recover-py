@@ -13,7 +13,7 @@ authors = [
     {name = "Luiz Petry", email = "juniorpetry.k1@gmail.com"},
 ]
 dependencies = [
-    "tqdm>=4.60.0",
+    "tqdm>=4.66.3",
 ]
 keywords = ["file-carving", "recovery", "forensics", "data-recovery"]
 classifiers = [
